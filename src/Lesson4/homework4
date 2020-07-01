@@ -1,0 +1,39 @@
+CREATE TABLE durations (id bigserial, duration interval , PRIMARY KEY(id));
+INSERT INTO durations (duration) VALUES ('01:00:00'), ('01:30:00'), ('02:00:00');
+
+
+CREATE TABLE movies (id bigserial, title varchar(255), duration_id bigint, PRIMARY KEY(id));
+INSERT INTO movies (title, duration_id) VALUES ('Movie1', 1), ('Movie2', 2),('Movie3', 3), ('Movie4', 2), ('Movie5', 1);
+
+CREATE TABLE sessions (id bigserial, movie_id bigint, start_time time,cost money, PRIMARY KEY(id));
+INSERT INTO sessions (movie_id, start_time,cost) VALUES (1, '10:00', 500),(2, '12:00', 300),(3, '14:00', 100),(4, '16:00', 200),(5, '17:00', 200),(4, '18:00', 800),(3, '19:00', 900),(2, '21:00', 500),(1, '22:00', 200);
+
+CREATE TABLE tickets (id bigserial, session_id bigint, PRIMARY KEY(id));
+INSERT INTO tickets (session_id) VALUES (1), (2), (3), (2), (5), (6), (2);
+
+
+1)ошибки в расписании (фильмы накладываются друг на друга), отсортированные по возрастанию времени. Выводить надо колонки «фильм 1», «время начала», «длительность», «фильм 2», «время начала», «длительность»;
+
+//вытянули все данные
+SELECT s.id, m.title, s.start_time, d.duration FROM sessions s LEFT JOIN movies m ON s.movie_id = m.id LEFT JOIN durations d ON m.duration_id = d.id
+// присоединили эту же таблицу со смещением на одну строку "в минус"
+LEFT JOIN sessions ss ON ss.id = s.id - 1 LEFT JOIN movies mm ON ss.movie_id = mm.id LEFT JOIN durations dd ON mm.duration_id = dd.id
+// выбрали наложения в сеансах
+WHERE s.start_time<(ss.start_time + dd.duration) ORDER BY s.start_time;
+
+2) перерывы 30 минут и более между фильмами — выводить по уменьшению длительности перерыва. Колонки «фильм 1», «время начала», «длительность», «время начала второго фильма», «длительность перерыва»;
+
+//вытянули все данные
+SELECT s.id, m.title, s.start_time, d.duration, ss.start_time AS next_film_start_time, (ss.start_time - s.start_time- d.duration) AS interval_between_movies FROM sessions s LEFT JOIN movies m ON s.movie_id = m.id LEFT JOIN durations d ON m.duration_id = d.id
+// присоединили эту же таблицу со смещением на одну строку "в плюс"
+LEFT JOIN sessions ss ON ss.id = s.id + 1 LEFT JOIN movies mm ON ss.movie_id = mm.id LEFT JOIN durations dd ON mm.duration_id = dd.id
+// выбрали интервалы больше, чем полчаса
+WHERE ((s.start_time+ d.duration + '00:30:00')<ss.start_time)  ORDER BY interval_between_movies;
+
+3) список фильмов, для каждого — с указанием общего числа посетителей за все время, среднего числа зрителей за сеанс и общей суммы сборов по каждому фильму (отсортировать по убыванию прибыли). Внизу таблицы должна быть строчка «итого», содержащая данные по всем фильмам сразу;
+число посетителей и кассовые сборы, сгруппированные по времени начала фильма: с 9 до 15, с 15 до 18, с 18 до 21, с 21 до 00:00 (сколько посетителей пришло с 9 до 15 часов и т.д.).
+
+SELECT m.title, COUNT (t) as total_tickets,COUNT(s) AS total_sessions,  sum(s.cost) as total_sum,  (CAST (count (t) as decimal))/(CAST (count (s) as decimal)) AS average_tickets_per_session FROM movies m FULL OUTER JOIN sessions s ON m.id = s.movie_id FULL OUTER JOIN tickets t ON s.id = t.session_id
+GROUP BY CUBE( m.title, (s.start_time>'09:00:00' AND s.start_time<'15:00:00', s.start_time>='15:00:00' AND s.start_time<'18:00:00', s.start_time>='18:00:00' AND s.start_time<'21:00:00', s.start_time>='21:00:00' AND s.start_time<'00:00:00')) ORDER BY title ;
+
+// последнее задание не получилось сделать в одной таблице,даже гугл ничего похожего не показал.. это какой-то по-моему уже middle SQL))
